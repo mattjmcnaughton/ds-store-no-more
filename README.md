@@ -87,7 +87,7 @@ ds-store-no-more monitor ~/ --timeout 3600
 By default, the following files are matched:
 - `.DS_Store`
 
-Add more patterns with the `--patterns` flag using glob syntax.
+Add more patterns with the `--additional-pattern` flag using glob syntax.
 
 ## License
 
