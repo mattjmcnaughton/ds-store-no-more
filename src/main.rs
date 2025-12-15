@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -40,15 +42,17 @@ async fn main() -> Result<()> {
             commands::run::execute(fs, config).await?;
         }
         Commands::Monitor {
-            root_dir: _,
-            interval: _,
-            timeout: _,
-            additional_patterns: _,
-            dry_run: _,
+            root_dir,
+            interval,
+            timeout,
+            additional_patterns,
+            dry_run,
             ..
         } => {
-            // TODO: Implement monitor mode
-            tracing::warn!("Monitor mode not yet implemented");
+            let config = CleanConfig::new(root_dir, additional_patterns, dry_run);
+            let interval_duration = Duration::from_secs(interval);
+            let timeout_duration = timeout.map(Duration::from_secs);
+            commands::monitor::execute(fs, config, interval_duration, timeout_duration).await?;
         }
     }
 

@@ -1,5 +1,7 @@
+mod mock;
 mod real;
 
+pub use mock::MockFileSystem;
 pub use real::RealFileSystem;
 
 use anyhow::Result;

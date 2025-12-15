@@ -57,3 +57,67 @@ impl<F: FileSystem> Cleaner<F> {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fs::MockFileSystem;
+
+    #[tokio::test]
+    async fn test_cleaner_scan() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/file.txt"),
+        ]);
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+
+        let found = cleaner.scan(Path::new("/test")).await.unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0], PathBuf::from("/test/.DS_Store"));
+    }
+
+    #[tokio::test]
+    async fn test_cleaner_clean() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/file.txt"),
+        ]);
+        let fs_clone = fs.clone();
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+
+        let result = cleaner.clean(Path::new("/test"), false).await.unwrap();
+
+        assert_eq!(result.files_found, 1);
+        assert_eq!(result.files_deleted, 1);
+        assert!(fs_clone.was_deleted(Path::new("/test/.DS_Store")));
+    }
+
+    #[tokio::test]
+    async fn test_cleaner_dry_run() {
+        let fs = MockFileSystem::with_files(vec![PathBuf::from("/test/.DS_Store")]);
+        let fs_clone = fs.clone();
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+
+        let result = cleaner.clean(Path::new("/test"), true).await.unwrap();
+
+        assert_eq!(result.files_deleted, 1);
+        assert!(result.dry_run);
+        assert!(!fs_clone.was_deleted(Path::new("/test/.DS_Store"))); // Not actually deleted
+    }
+
+    #[tokio::test]
+    async fn test_cleaner_handles_deletion_error() {
+        let fs = MockFileSystem::with_files(vec![PathBuf::from("/test/.DS_Store")]);
+        fs.set_fail_on(PathBuf::from("/test/.DS_Store"));
+
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+
+        let result = cleaner.clean(Path::new("/test"), false).await.unwrap();
+
+        assert_eq!(result.files_found, 1);
+        assert_eq!(result.files_deleted, 0);
+        assert_eq!(result.files_failed.len(), 1);
+        assert!(result.files_failed[0].1.contains("Permission denied"));
+    }
+}
