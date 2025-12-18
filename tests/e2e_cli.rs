@@ -46,11 +46,7 @@ fn test_run_deletes_ds_store() {
     let ds_store = create_file(&temp_dir, ".DS_Store");
     let keep_file = create_file(&temp_dir, "keep.txt");
 
-    cmd!()
-        .arg("run")
-        .arg(temp_dir.path())
-        .assert()
-        .success();
+    cmd!().arg("run").arg(temp_dir.path()).assert().success();
 
     assert!(!ds_store.exists());
     assert!(keep_file.exists());
@@ -123,11 +119,7 @@ fn test_run_empty_directory() {
     // Test that running on an empty directory succeeds with 0 files found
     let temp_dir = setup_test_dir();
 
-    cmd!()
-        .arg("run")
-        .arg(temp_dir.path())
-        .assert()
-        .success();
+    cmd!().arg("run").arg(temp_dir.path()).assert().success();
 }
 
 // =============================================================================
@@ -141,7 +133,9 @@ fn test_monitor_command_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Monitor directory and clean periodically"))
+        .stdout(predicate::str::contains(
+            "Monitor directory and clean periodically",
+        ))
         .stdout(predicate::str::contains("--interval"))
         .stdout(predicate::str::contains("--timeout"));
 }
