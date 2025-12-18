@@ -30,7 +30,7 @@ async fn test_scan_finds_ds_store_files() {
     create_file(&temp_dir, "keep_me.txt");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
     let found = cleaner.scan(temp_dir.path()).await.unwrap();
 
@@ -47,7 +47,7 @@ async fn test_scan_with_glob_patterns() {
     create_file(&temp_dir, "keep.txt");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &["*.bak".to_string()]).unwrap();
+    let cleaner = Cleaner::new(fs, &["*.bak".to_string()], vec![]).unwrap();
 
     let found = cleaner.scan(temp_dir.path()).await.unwrap();
 
@@ -62,7 +62,7 @@ async fn test_clean_deletes_files() {
     let keep_file = create_file(&temp_dir, "keep.txt");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
     let result = cleaner.clean(temp_dir.path(), false).await.unwrap();
 
@@ -80,7 +80,7 @@ async fn test_dry_run_does_not_delete() {
     let ds_store = create_file(&temp_dir, ".DS_Store");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
     let result = cleaner.clean(temp_dir.path(), true).await.unwrap();
 
@@ -99,7 +99,12 @@ async fn test_clean_with_multiple_patterns() {
     create_file(&temp_dir, "important.txt");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string(), "Thumbs.db".to_string()]).unwrap();
+    let cleaner = Cleaner::new(
+        fs,
+        &[".DS_Store".to_string(), "Thumbs.db".to_string()],
+        vec![],
+    )
+    .unwrap();
 
     let result = cleaner.clean(temp_dir.path(), false).await.unwrap();
 
@@ -112,7 +117,7 @@ async fn test_scan_empty_directory() {
     let temp_dir = setup_test_dir();
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
     let found = cleaner.scan(temp_dir.path()).await.unwrap();
 
@@ -129,9 +134,155 @@ async fn test_nested_directories() {
     create_file(&temp_dir, "a/b/c/.DS_Store");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
     let found = cleaner.scan(temp_dir.path()).await.unwrap();
 
     assert_eq!(found.len(), 4);
+}
+
+// =============================================================================
+// Ignore Pattern Integration Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_ignore_single_directory() {
+    let temp_dir = setup_test_dir();
+
+    // Create .DS_Store in root and in node_modules
+    create_file(&temp_dir, ".DS_Store");
+    create_file(&temp_dir, "node_modules/.DS_Store");
+    create_file(&temp_dir, "src/.DS_Store");
+
+    let fs = RealFileSystem;
+    let cleaner = Cleaner::new(
+        fs,
+        &[".DS_Store".to_string()],
+        vec!["node_modules".to_string()],
+    )
+    .unwrap();
+
+    let found = cleaner.scan(temp_dir.path()).await.unwrap();
+
+    assert_eq!(found.len(), 2);
+    assert!(found
+        .iter()
+        .all(|p| !p.to_string_lossy().contains("node_modules")));
+}
+
+#[tokio::test]
+async fn test_ignore_multiple_directories() {
+    let temp_dir = setup_test_dir();
+
+    create_file(&temp_dir, ".DS_Store");
+    create_file(&temp_dir, "node_modules/.DS_Store");
+    create_file(&temp_dir, ".git/objects/.DS_Store");
+    create_file(&temp_dir, "target/debug/.DS_Store");
+    create_file(&temp_dir, "src/.DS_Store");
+
+    let fs = RealFileSystem;
+    let cleaner = Cleaner::new(
+        fs,
+        &[".DS_Store".to_string()],
+        vec![
+            "node_modules".to_string(),
+            ".git".to_string(),
+            "target".to_string(),
+        ],
+    )
+    .unwrap();
+
+    let found = cleaner.scan(temp_dir.path()).await.unwrap();
+
+    assert_eq!(found.len(), 2);
+    // Only root and src .DS_Store should be found
+}
+
+#[tokio::test]
+async fn test_ignore_nested_directory() {
+    let temp_dir = setup_test_dir();
+
+    create_file(&temp_dir, ".DS_Store");
+    create_file(&temp_dir, "a/b/c/node_modules/deep/.DS_Store");
+
+    let fs = RealFileSystem;
+    let cleaner = Cleaner::new(
+        fs,
+        &[".DS_Store".to_string()],
+        vec!["node_modules".to_string()],
+    )
+    .unwrap();
+
+    let found = cleaner.scan(temp_dir.path()).await.unwrap();
+
+    assert_eq!(found.len(), 1);
+}
+
+#[tokio::test]
+async fn test_ignore_does_not_affect_siblings() {
+    let temp_dir = setup_test_dir();
+
+    // node_modules should be ignored, but node_stuff should not
+    create_file(&temp_dir, "node_modules/.DS_Store");
+    create_file(&temp_dir, "node_stuff/.DS_Store");
+    create_file(&temp_dir, "src/.DS_Store");
+
+    let fs = RealFileSystem;
+    let cleaner = Cleaner::new(
+        fs,
+        &[".DS_Store".to_string()],
+        vec!["node_modules".to_string()],
+    )
+    .unwrap();
+
+    let found = cleaner.scan(temp_dir.path()).await.unwrap();
+
+    assert_eq!(found.len(), 2);
+    assert!(found
+        .iter()
+        .any(|p| p.to_string_lossy().contains("node_stuff")));
+    assert!(found.iter().any(|p| p.to_string_lossy().contains("src")));
+}
+
+#[tokio::test]
+async fn test_ignore_exact_match_only() {
+    let temp_dir = setup_test_dir();
+
+    // "node" pattern should NOT match "node_modules"
+    create_file(&temp_dir, "node_modules/.DS_Store");
+    create_file(&temp_dir, "node/.DS_Store");
+
+    let fs = RealFileSystem;
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec!["node".to_string()]).unwrap();
+
+    let found = cleaner.scan(temp_dir.path()).await.unwrap();
+
+    // node_modules should be found (not ignored), node should be ignored
+    assert_eq!(found.len(), 1);
+    assert!(found[0].to_string_lossy().contains("node_modules"));
+}
+
+#[tokio::test]
+async fn test_run_command_with_ignore() {
+    let temp_dir = setup_test_dir();
+
+    let ds_store_root = create_file(&temp_dir, ".DS_Store");
+    let ds_store_ignored = create_file(&temp_dir, "node_modules/.DS_Store");
+    let ds_store_src = create_file(&temp_dir, "src/.DS_Store");
+
+    let fs = RealFileSystem;
+    let cleaner = Cleaner::new(
+        fs,
+        &[".DS_Store".to_string()],
+        vec!["node_modules".to_string()],
+    )
+    .unwrap();
+
+    let result = cleaner.clean(temp_dir.path(), false).await.unwrap();
+
+    assert_eq!(result.files_found, 2);
+    assert_eq!(result.files_deleted, 2);
+    assert!(!ds_store_root.exists());
+    assert!(!ds_store_src.exists());
+    assert!(ds_store_ignored.exists()); // File in ignored dir should remain
 }

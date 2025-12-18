@@ -26,6 +26,10 @@ pub enum Commands {
         #[arg(short = 'p', long = "additional-pattern")]
         additional_patterns: Vec<String>,
 
+        /// Directory to ignore during traversal (can be repeated)
+        #[arg(long = "ignore")]
+        ignore_patterns: Vec<String>,
+
         /// Show what would be deleted without deleting
         #[arg(short = 'n', long)]
         dry_run: bool,
@@ -55,6 +59,10 @@ pub enum Commands {
         /// Additional file pattern (can be repeated)
         #[arg(short = 'p', long = "additional-pattern")]
         additional_patterns: Vec<String>,
+
+        /// Directory to ignore during traversal (can be repeated)
+        #[arg(long = "ignore")]
+        ignore_patterns: Vec<String>,
 
         /// Show what would be deleted without deleting
         #[arg(short = 'n', long)]

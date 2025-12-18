@@ -67,10 +67,24 @@ impl MockFileSystem {
     }
 }
 
+/// Check if a path contains any directory component that matches an ignore pattern.
+fn path_contains_ignored_dir(path: &Path, ignore_patterns: &[String]) -> bool {
+    for component in path.components() {
+        if let std::path::Component::Normal(name) = component {
+            if let Some(name_str) = name.to_str() {
+                if ignore_patterns.iter().any(|p| name_str == p) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 #[async_trait]
 impl FileSystem for MockFileSystem {
-    async fn walk_dir(&self, _root: &Path) -> Result<Vec<PathBuf>> {
-        // Return all files that haven't been deleted
+    async fn walk_dir(&self, _root: &Path, ignore_patterns: &[String]) -> Result<Vec<PathBuf>> {
+        // Return all files that haven't been deleted and aren't in ignored directories
         let files = self.files.lock().unwrap();
         let deleted = self.deleted.lock().unwrap();
         let deleted_set: HashSet<_> = deleted.iter().collect();
@@ -78,6 +92,7 @@ impl FileSystem for MockFileSystem {
         Ok(files
             .iter()
             .filter(|f| !deleted_set.contains(f))
+            .filter(|f| !path_contains_ignored_dir(f, ignore_patterns))
             .cloned()
             .collect())
     }
@@ -109,7 +124,7 @@ mod tests {
             PathBuf::from("/test/file.txt"),
         ]);
 
-        let files = fs.walk_dir(Path::new("/test")).await.unwrap();
+        let files = fs.walk_dir(Path::new("/test"), &[]).await.unwrap();
         assert_eq!(files.len(), 2);
     }
 
@@ -144,8 +159,93 @@ mod tests {
 
         fs.remove_file(Path::new("/test/.DS_Store")).await.unwrap();
 
-        let files = fs.walk_dir(Path::new("/test")).await.unwrap();
+        let files = fs.walk_dir(Path::new("/test"), &[]).await.unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0], PathBuf::from("/test/file.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_walk_dir_with_empty_ignore_patterns() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/node_modules/.DS_Store"),
+        ]);
+
+        let files = fs.walk_dir(Path::new("/test"), &[]).await.unwrap();
+        assert_eq!(files.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_walk_dir_ignores_single_directory() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/node_modules/.DS_Store"),
+            PathBuf::from("/test/src/file.txt"),
+        ]);
+
+        let files = fs
+            .walk_dir(Path::new("/test"), &["node_modules".to_string()])
+            .await
+            .unwrap();
+
+        assert_eq!(files.len(), 2);
+        assert!(files.contains(&PathBuf::from("/test/.DS_Store")));
+        assert!(files.contains(&PathBuf::from("/test/src/file.txt")));
+        assert!(!files.contains(&PathBuf::from("/test/node_modules/.DS_Store")));
+    }
+
+    #[tokio::test]
+    async fn test_walk_dir_ignores_multiple_directories() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/node_modules/.DS_Store"),
+            PathBuf::from("/test/.git/objects/.DS_Store"),
+            PathBuf::from("/test/src/.DS_Store"),
+        ]);
+
+        let files = fs
+            .walk_dir(
+                Path::new("/test"),
+                &["node_modules".to_string(), ".git".to_string()],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(files.len(), 2);
+        assert!(files.contains(&PathBuf::from("/test/.DS_Store")));
+        assert!(files.contains(&PathBuf::from("/test/src/.DS_Store")));
+    }
+
+    #[tokio::test]
+    async fn test_walk_dir_ignores_nested_directory() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/a/b/c/node_modules/deep/.DS_Store"),
+        ]);
+
+        let files = fs
+            .walk_dir(Path::new("/test"), &["node_modules".to_string()])
+            .await
+            .unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0], PathBuf::from("/test/.DS_Store"));
+    }
+
+    #[tokio::test]
+    async fn test_walk_dir_partial_name_no_match() {
+        // "node" should not match "node_modules" - exact match only
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/node_modules/.DS_Store"),
+        ]);
+
+        let files = fs
+            .walk_dir(Path::new("/test"), &["node".to_string()])
+            .await
+            .unwrap();
+
+        // Both files should be returned since "node" != "node_modules"
+        assert_eq!(files.len(), 2);
     }
 }
