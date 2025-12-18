@@ -7,7 +7,7 @@
       "@semantic-release/exec",
       {
         "prepareCmd": "sed -i 's/^version = \".*\"/version = \"${nextRelease.version}\"/' Cargo.toml",
-        "publishCmd": "echo 'Binaries will be built and uploaded by the build-binaries job'"
+        "publishCmd": "echo \"new-release-version=${nextRelease.version}\" >> $GITHUB_OUTPUT && echo \"new-release-published=true\" >> $GITHUB_OUTPUT"
       }
     ],
     [
