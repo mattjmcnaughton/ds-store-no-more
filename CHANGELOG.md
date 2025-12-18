@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/mattjmcnaughton/ds-store-no-more/compare/v1.0.0...v1.1.0) (2025-12-18)
+
+
+### Features
+
+* **cli:** add --ignore flag to skip directories during cleanup ([d84b2fb](https://github.com/mattjmcnaughton/ds-store-no-more/commit/d84b2fb73eb216a93451524407b6ef1926417385))
+
 # 1.0.0 (2025-12-18)
 
 
