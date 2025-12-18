@@ -202,3 +202,165 @@ fn test_monitor_multiple_cleanup_cycles() {
 
     assert!(!ds_store1.exists());
 }
+
+// =============================================================================
+// Ignore Flag Tests
+// =============================================================================
+
+#[test]
+fn test_run_with_ignore_flag() {
+    let temp_dir = setup_test_dir();
+    let ds_store_root = create_file(&temp_dir, ".DS_Store");
+    let ds_store_ignored = create_file(&temp_dir, "node_modules/.DS_Store");
+    let ds_store_src = create_file(&temp_dir, "src/.DS_Store");
+
+    cmd!()
+        .arg("run")
+        .arg(temp_dir.path())
+        .arg("--ignore")
+        .arg("node_modules")
+        .assert()
+        .success();
+
+    assert!(!ds_store_root.exists());
+    assert!(!ds_store_src.exists());
+    assert!(ds_store_ignored.exists()); // File in ignored dir should remain
+}
+
+#[test]
+fn test_run_with_multiple_ignore_flags() {
+    let temp_dir = setup_test_dir();
+    let ds_store_root = create_file(&temp_dir, ".DS_Store");
+    let ds_store_node = create_file(&temp_dir, "node_modules/.DS_Store");
+    let ds_store_git = create_file(&temp_dir, ".git/objects/.DS_Store");
+    let ds_store_target = create_file(&temp_dir, "target/debug/.DS_Store");
+    let ds_store_src = create_file(&temp_dir, "src/.DS_Store");
+
+    cmd!()
+        .arg("run")
+        .arg(temp_dir.path())
+        .arg("--ignore")
+        .arg("node_modules")
+        .arg("--ignore")
+        .arg(".git")
+        .arg("--ignore")
+        .arg("target")
+        .assert()
+        .success();
+
+    assert!(!ds_store_root.exists());
+    assert!(!ds_store_src.exists());
+    assert!(ds_store_node.exists());
+    assert!(ds_store_git.exists());
+    assert!(ds_store_target.exists());
+}
+
+#[test]
+fn test_run_ignore_preserves_files_in_ignored_dir() {
+    let temp_dir = setup_test_dir();
+    let ds_store_ignored = create_file(&temp_dir, "node_modules/lib/.DS_Store");
+    let other_file = create_file(&temp_dir, "node_modules/lib/index.js");
+
+    cmd!()
+        .arg("run")
+        .arg(temp_dir.path())
+        .arg("--ignore")
+        .arg("node_modules")
+        .assert()
+        .success();
+
+    // Both files in ignored directory should remain untouched
+    assert!(ds_store_ignored.exists());
+    assert!(other_file.exists());
+}
+
+#[test]
+fn test_monitor_with_ignore_flag() {
+    let temp_dir = setup_test_dir();
+    let ds_store_root = create_file(&temp_dir, ".DS_Store");
+    let ds_store_ignored = create_file(&temp_dir, "node_modules/.DS_Store");
+
+    cmd!()
+        .arg("monitor")
+        .arg(temp_dir.path())
+        .arg("--interval")
+        .arg("1")
+        .arg("--timeout")
+        .arg("2")
+        .arg("--ignore")
+        .arg("node_modules")
+        .timeout(Duration::from_secs(10))
+        .assert()
+        .success();
+
+    assert!(!ds_store_root.exists());
+    assert!(ds_store_ignored.exists());
+}
+
+#[test]
+fn test_run_ignore_with_dry_run() {
+    let temp_dir = setup_test_dir();
+    let ds_store_root = create_file(&temp_dir, ".DS_Store");
+    let ds_store_ignored = create_file(&temp_dir, "node_modules/.DS_Store");
+    let ds_store_src = create_file(&temp_dir, "src/.DS_Store");
+
+    cmd!()
+        .arg("run")
+        .arg(temp_dir.path())
+        .arg("--ignore")
+        .arg("node_modules")
+        .arg("--dry-run")
+        .assert()
+        .success();
+
+    // All files should still exist in dry-run mode
+    assert!(ds_store_root.exists());
+    assert!(ds_store_ignored.exists());
+    assert!(ds_store_src.exists());
+}
+
+#[test]
+fn test_run_ignore_with_additional_pattern() {
+    let temp_dir = setup_test_dir();
+    let ds_store = create_file(&temp_dir, ".DS_Store");
+    let thumbs_db = create_file(&temp_dir, "Thumbs.db");
+    let ds_store_ignored = create_file(&temp_dir, "node_modules/.DS_Store");
+    let thumbs_ignored = create_file(&temp_dir, "node_modules/Thumbs.db");
+
+    cmd!()
+        .arg("run")
+        .arg(temp_dir.path())
+        .arg("-p")
+        .arg("Thumbs.db")
+        .arg("--ignore")
+        .arg("node_modules")
+        .assert()
+        .success();
+
+    assert!(!ds_store.exists());
+    assert!(!thumbs_db.exists());
+    assert!(ds_store_ignored.exists());
+    assert!(thumbs_ignored.exists());
+}
+
+#[test]
+fn test_run_help_shows_ignore_option() {
+    cmd!()
+        .arg("run")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--ignore"))
+        .stdout(predicate::str::contains("Directory to ignore"));
+}
+
+#[test]
+fn test_monitor_help_shows_ignore_option() {
+    cmd!()
+        .arg("monitor")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--ignore"))
+        .stdout(predicate::str::contains("Directory to ignore"));
+}

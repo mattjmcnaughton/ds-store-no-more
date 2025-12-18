@@ -3,16 +3,23 @@ use std::path::PathBuf;
 pub struct CleanConfig {
     pub root_dir: PathBuf,
     pub patterns: Vec<String>,
+    pub ignore_patterns: Vec<String>,
     pub dry_run: bool,
 }
 
 impl CleanConfig {
-    pub fn new(root_dir: PathBuf, additional_patterns: Vec<String>, dry_run: bool) -> Self {
+    pub fn new(
+        root_dir: PathBuf,
+        additional_patterns: Vec<String>,
+        ignore_patterns: Vec<String>,
+        dry_run: bool,
+    ) -> Self {
         let mut all_patterns = vec![".DS_Store".to_string()];
         all_patterns.extend(additional_patterns);
         Self {
             root_dir,
             patterns: all_patterns,
+            ignore_patterns,
             dry_run,
         }
     }
@@ -24,7 +31,7 @@ mod tests {
 
     #[test]
     fn test_new_config_includes_ds_store() {
-        let config = CleanConfig::new(PathBuf::from("/test"), vec![], false);
+        let config = CleanConfig::new(PathBuf::from("/test"), vec![], vec![], false);
         assert!(config.patterns.contains(&".DS_Store".to_string()));
     }
 
@@ -33,6 +40,7 @@ mod tests {
         let config = CleanConfig::new(
             PathBuf::from("/test"),
             vec!["*.bak".to_string(), "Thumbs.db".to_string()],
+            vec![],
             false,
         );
         assert_eq!(config.patterns.len(), 3);
@@ -43,7 +51,20 @@ mod tests {
 
     #[test]
     fn test_config_dry_run_flag() {
-        let config = CleanConfig::new(PathBuf::from("/test"), vec![], true);
+        let config = CleanConfig::new(PathBuf::from("/test"), vec![], vec![], true);
         assert!(config.dry_run);
+    }
+
+    #[test]
+    fn test_config_with_ignore_patterns() {
+        let config = CleanConfig::new(
+            PathBuf::from("/test"),
+            vec![],
+            vec!["node_modules".to_string(), ".git".to_string()],
+            false,
+        );
+        assert_eq!(config.ignore_patterns.len(), 2);
+        assert!(config.ignore_patterns.contains(&"node_modules".to_string()));
+        assert!(config.ignore_patterns.contains(&".git".to_string()));
     }
 }

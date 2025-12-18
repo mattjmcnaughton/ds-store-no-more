@@ -35,10 +35,11 @@ async fn main() -> Result<()> {
         Commands::Run {
             root_dir,
             additional_patterns,
+            ignore_patterns,
             dry_run,
             ..
         } => {
-            let config = CleanConfig::new(root_dir, additional_patterns, dry_run);
+            let config = CleanConfig::new(root_dir, additional_patterns, ignore_patterns, dry_run);
             commands::run::execute(fs, config).await?;
         }
         Commands::Monitor {
@@ -46,10 +47,11 @@ async fn main() -> Result<()> {
             interval,
             timeout,
             additional_patterns,
+            ignore_patterns,
             dry_run,
             ..
         } => {
-            let config = CleanConfig::new(root_dir, additional_patterns, dry_run);
+            let config = CleanConfig::new(root_dir, additional_patterns, ignore_patterns, dry_run);
             let interval_duration = Duration::from_secs(interval);
             let timeout_duration = timeout.map(Duration::from_secs);
             commands::monitor::execute(fs, config, interval_duration, timeout_duration).await?;

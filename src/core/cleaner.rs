@@ -9,17 +9,22 @@ use super::PatternMatcher;
 pub struct Cleaner<F: FileSystem> {
     fs: F,
     matcher: PatternMatcher,
+    ignore_patterns: Vec<String>,
 }
 
 impl<F: FileSystem> Cleaner<F> {
-    pub fn new(fs: F, patterns: &[String]) -> Result<Self> {
+    pub fn new(fs: F, patterns: &[String], ignore_patterns: Vec<String>) -> Result<Self> {
         let matcher = PatternMatcher::new(patterns)?;
-        Ok(Self { fs, matcher })
+        Ok(Self {
+            fs,
+            matcher,
+            ignore_patterns,
+        })
     }
 
     /// Scan and return matching files
     pub async fn scan(&self, root: &Path) -> Result<Vec<PathBuf>> {
-        let all_files = self.fs.walk_dir(root).await?;
+        let all_files = self.fs.walk_dir(root, &self.ignore_patterns).await?;
         let matching: Vec<PathBuf> = all_files
             .into_iter()
             .filter(|path| {
@@ -69,7 +74,7 @@ mod tests {
             PathBuf::from("/test/.DS_Store"),
             PathBuf::from("/test/file.txt"),
         ]);
-        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
         let found = cleaner.scan(Path::new("/test")).await.unwrap();
 
@@ -84,7 +89,7 @@ mod tests {
             PathBuf::from("/test/file.txt"),
         ]);
         let fs_clone = fs.clone();
-        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
         let result = cleaner.clean(Path::new("/test"), false).await.unwrap();
 
@@ -97,7 +102,7 @@ mod tests {
     async fn test_cleaner_dry_run() {
         let fs = MockFileSystem::with_files(vec![PathBuf::from("/test/.DS_Store")]);
         let fs_clone = fs.clone();
-        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
         let result = cleaner.clean(Path::new("/test"), true).await.unwrap();
 
@@ -111,7 +116,7 @@ mod tests {
         let fs = MockFileSystem::with_files(vec![PathBuf::from("/test/.DS_Store")]);
         fs.set_fail_on(PathBuf::from("/test/.DS_Store"));
 
-        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()]).unwrap();
+        let cleaner = Cleaner::new(fs, &[".DS_Store".to_string()], vec![]).unwrap();
 
         let result = cleaner.clean(Path::new("/test"), false).await.unwrap();
 
@@ -119,5 +124,45 @@ mod tests {
         assert_eq!(result.files_deleted, 0);
         assert_eq!(result.files_failed.len(), 1);
         assert!(result.files_failed[0].1.contains("Permission denied"));
+    }
+
+    #[tokio::test]
+    async fn test_cleaner_with_ignore_patterns() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/node_modules/.DS_Store"),
+            PathBuf::from("/test/src/.DS_Store"),
+        ]);
+        let cleaner = Cleaner::new(
+            fs,
+            &[".DS_Store".to_string()],
+            vec!["node_modules".to_string()],
+        )
+        .unwrap();
+
+        let found = cleaner.scan(Path::new("/test")).await.unwrap();
+
+        assert_eq!(found.len(), 2);
+        assert!(found.contains(&PathBuf::from("/test/.DS_Store")));
+        assert!(found.contains(&PathBuf::from("/test/src/.DS_Store")));
+        assert!(!found.contains(&PathBuf::from("/test/node_modules/.DS_Store")));
+    }
+
+    #[tokio::test]
+    async fn test_cleaner_ignores_ds_store_in_ignored_dir() {
+        let fs = MockFileSystem::with_files(vec![
+            PathBuf::from("/test/.DS_Store"),
+            PathBuf::from("/test/.git/objects/.DS_Store"),
+        ]);
+        let fs_clone = fs.clone();
+        let cleaner =
+            Cleaner::new(fs, &[".DS_Store".to_string()], vec![".git".to_string()]).unwrap();
+
+        let result = cleaner.clean(Path::new("/test"), false).await.unwrap();
+
+        assert_eq!(result.files_found, 1);
+        assert_eq!(result.files_deleted, 1);
+        assert!(fs_clone.was_deleted(Path::new("/test/.DS_Store")));
+        assert!(!fs_clone.was_deleted(Path::new("/test/.git/objects/.DS_Store")));
     }
 }

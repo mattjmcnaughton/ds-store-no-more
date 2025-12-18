@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 #[async_trait]
 pub trait FileSystem: Send + Sync {
     /// Walk directory recursively, returning all file paths (skips symlinks)
-    async fn walk_dir(&self, root: &Path) -> Result<Vec<PathBuf>>;
+    /// Directories matching any ignore pattern (exact name match) will not be traversed.
+    async fn walk_dir(&self, root: &Path, ignore_patterns: &[String]) -> Result<Vec<PathBuf>>;
 
     /// Remove a file
     async fn remove_file(&self, path: &Path) -> Result<()>;

@@ -11,7 +11,7 @@ pub async fn execute<F: FileSystem>(
     interval_duration: Duration,
     timeout: Option<Duration>,
 ) -> Result<()> {
-    let cleaner = Cleaner::new(fs, &config.patterns)?;
+    let cleaner = Cleaner::new(fs, &config.patterns, config.ignore_patterns.clone())?;
 
     tracing::info!(
         root = %config.root_dir.display(),
