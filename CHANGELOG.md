@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/mattjmcnaughton/ds-store-no-more/compare/v1.1.0...v1.1.1) (2025-12-18)
+
+
+### Bug Fixes
+
+* update .releaserc to ensure setting github ([d4dcf9e](https://github.com/mattjmcnaughton/ds-store-no-more/commit/d4dcf9ef417015575c3725e51ad5fd9d16f78636))
+
 # [1.1.0](https://github.com/mattjmcnaughton/ds-store-no-more/compare/v1.0.0...v1.1.0) (2025-12-18)
 
 
