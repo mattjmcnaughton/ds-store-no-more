@@ -99,11 +99,7 @@ async fn test_clean_with_multiple_patterns() {
     create_file(&temp_dir, "important.txt");
 
     let fs = RealFileSystem;
-    let cleaner = Cleaner::new(
-        fs,
-        &[".DS_Store".to_string(), "Thumbs.db".to_string()],
-    )
-    .unwrap();
+    let cleaner = Cleaner::new(fs, &[".DS_Store".to_string(), "Thumbs.db".to_string()]).unwrap();
 
     let result = cleaner.clean(temp_dir.path(), false).await.unwrap();
 

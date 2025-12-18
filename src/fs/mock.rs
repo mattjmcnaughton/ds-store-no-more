@@ -129,7 +129,10 @@ mod tests {
 
         let result = fs.remove_file(Path::new("/test/.DS_Store")).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Permission denied"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Permission denied"));
     }
 
     #[tokio::test]
